@@ -46,41 +46,40 @@ int main(int argc, char* argv[])
     {
         try
         {
-            if(gtpClient.handle()) break;
+            if(gtpClient.handle())
+                break;
 
-//            if(DEBUG)
-//            {
-//                std::cerr << gameState << std::endl;
-//
-//                std::cerr << "\nAlpha proximity: " << std::endl;
-//                for(size_t i = 0; i < gameState.alphaProximity.size(); ++i)
-//                {
-//                    for(size_t j = 0; j < gameState.alphaProximity.size(); ++j)
-//                    {
-//                        if(gameState.alphaProximity[i][j] == std::numeric_limits<size_t>::max())
-//                            std::cerr << "_ ";
-//                        else if(gameState.alphaProximity[i][j] >= 10)
-//                            std::cerr << "> ";
-//                        else
-//                            std::cerr << gameState.alphaProximity[i][j] << " ";
-//                    }
-//                    std::cerr << std::endl;
-//                }
-//                std::cerr << "\nNum proximity: " << std::endl;
-//                for(size_t i = 0; i < gameState.numProximity.size(); ++i)
-//                {
-//                    for(size_t j = 0; j < gameState.numProximity.size(); ++j)
-//                    {
-//                        if(gameState.numProximity[i][j] == std::numeric_limits<size_t>::max())
-//                            std::cerr << "_ ";
-//                        else if(gameState.numProximity[i][j] >= 10)
-//                            std::cerr << "> ";
-//                        else
-//                            std::cerr << gameState.numProximity[i][j] << " ";
-//                    }
-//                    std::cerr << std::endl;
-//                }
-//            }
+            if(DEBUG)
+            {
+                std::cerr << gameState << std::endl;
+
+                std::cerr << "\nAlpha proximity: " << std::endl;
+                for(size_t i = 0; i < gameState.alphaProximity.size(); ++i)
+                {
+                    if(gameState.alphaProximity[i] == std::numeric_limits<size_t>::max())
+                        std::cerr << "_ ";
+                    else if(gameState.alphaProximity[i] >= 10)
+                        std::cerr << "> ";
+                    else
+                        std::cerr << gameState.alphaProximity[i] << " ";
+
+                    if((i + 1) % Position::boardSize == 0)
+                        std::cerr << std::endl;
+                }
+                std::cerr << "\nNum proximity: " << std::endl;
+                for(size_t i = 0; i < gameState.numProximity.size(); ++i)
+                {
+                    if(gameState.numProximity[i] == std::numeric_limits<size_t>::max())
+                        std::cerr << "_ ";
+                    else if(gameState.numProximity[i] >= 10)
+                        std::cerr << "> ";
+                    else
+                        std::cerr << gameState.numProximity[i] << " ";
+
+                    if((i + 1) % Position::boardSize == 0)
+                        std::cerr << std::endl;
+                }
+            }
         }
         catch(const std::string& e)
         {

@@ -96,7 +96,7 @@ public:
 
     virtual result_type operator ()(argument_type arguments)
     {
-        Position pos = coordToPos(arguments[2], gameState_.board.size());
+        Position pos = coordToPos(arguments[2]);
 
         GameState::Field field;
         if(arguments[0] == "al")
@@ -213,7 +213,7 @@ public:
         srand(time(0));
         while(1)
         {
-            pos = Position(rand() % Position::boardSize, rand() % Position::boardSize);
+            pos = Position(rand() % (Position::boardSize - 1) + 1, rand() % (Position::boardSize - 1) + 1);
             if(gameState_.board[pos].type == GameState::Field::FREE)
                 break;
         }
@@ -230,7 +230,7 @@ public:
         }
         gameState_.board[pos].id = arguments[1][0];
 
-        return "= " + posToCoord(pos, gameState_.board.size());
+        return "= " + posToCoord(pos);
     }
 
 private:

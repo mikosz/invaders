@@ -18,6 +18,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include <util.hpp>
+
 const size_t DEFAULT_BOARD_SIZE = 19;
 const size_t DEFAULT_PAWNS_PER_PLAYER = 5;
 
@@ -188,8 +190,8 @@ public:
     {
         Position::boardSize = boardSize;
         board.resize(boardSize * boardSize);
-        alphaProximity.resize(boardSize * boardSize);
-        numProximity.resize(boardSize * boardSize);
+        alphaProximity.resize(board.size());
+        numProximity.resize(board.size());
     }
 
     std::vector<Field> board;
@@ -202,21 +204,19 @@ public:
 
     clock_t timeLeft;
 
-    void calculateProximity(std::map<char, Pawn>& pawns,
-            std::vector<size_t>& proximity)
+    void calculateProximity(std::map<char, Pawn>& pawns, std::vector<size_t>& proximity)
     {
         size_t size = board.size();
 
         std::vector<bool> visited;
         visited.resize(size, false);
-        proximity.assign(size, std::numeric_limits<size_t>::max());
+        proximity.assign(size, MAX_SIZE_T);
 
         VisitEntry entry;
 
         std::deque<VisitEntry> toVisit;
 
-        for(std::map<char, Pawn>::iterator it = pawns.begin(); it
-                != pawns.end(); ++it)
+        for(std::map<char, Pawn>::iterator it = pawns.begin(); it != pawns.end(); ++it)
         {
             entry.pos = it->second.pos;
             entry.distance = 0;
@@ -250,25 +250,25 @@ public:
 
 };
 
-inline size_t row(const std::string& coord, size_t height)
+inline size_t row(const std::string& coord)
 {
-    return height - atoi(coord.substr(1).c_str());
+    return Position::boardSize - atoi(coord.substr(1).c_str()) - 1;
 }
 
 inline size_t column(const std::string& coord)
 {
-    return coord[0] - 'a';
+    return coord[0] - 'a' + 1;
 }
 
-inline Position coordToPos(const std::string& coord, size_t height)
+inline Position coordToPos(const std::string& coord)
 {
-    return std::make_pair(row(coord, height), column(coord));
+    return Position(row(coord), column(coord));
 }
 
-inline std::string posToCoord(const Position& pos, size_t height)
+inline std::string posToCoord(const Position& pos)
 {
     std::stringstream result;
-    result << static_cast<char> ('a' + pos.col()) << height - pos.row();
+    result << static_cast<char> ('a' + pos.col() - 1) << Position::boardSize - pos.row() - 1;
     return result.str();
 }
 
@@ -339,11 +339,10 @@ inline std::ostream& operator<<(std::ostream& os, const GameState::Field& field)
 
 inline std::ostream& operator<<(std::ostream& os, const GameState& gameState)
 {
-    for(size_t row = 0; row < gameState.board.size(); ++row)
+    for(size_t i = 0; i < Position::boardSize; ++i)
     {
-        std::copy(gameState.board.begin() + (row * Position::boardSize),
-                gameState.board.begin() + ((row + 1) * Position::boardSize),
-                std::ostream_iterator<GameState::Field>(os));
+        std::copy(gameState.board.begin() + (i * Position::boardSize), gameState.board.begin()
+                + ((i + 1) * Position::boardSize), std::ostream_iterator<GameState::Field>(os));
         os << '\n';
     }
 
