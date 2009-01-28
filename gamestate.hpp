@@ -33,6 +33,11 @@ public:
     {
     }
 
+    Position(size_t pos) :
+        pos_(pos)
+    {
+    }
+
     Position(const std::pair<size_t, size_t>& pos) :
         pos_(pos.first * boardSize + pos.second)
     {
@@ -43,7 +48,7 @@ public:
     {
     }
 
-    operator size_t()
+    operator size_t() const
     {
         return pos_;
     }
@@ -62,6 +67,12 @@ public:
 
     friend bool operator==(const Position& lhs, const Position& rhs);
 
+    Position& operator=(size_t rhs)
+    {
+        pos_ = rhs;
+        return *this;
+    }
+
 private:
 
     friend class PosIterator;
@@ -75,6 +86,7 @@ inline bool operator==(const Position& lhs, const Position& rhs)
     return lhs.pos_ == rhs.pos_;
 }
 
+// iteruje po polach wokol pola centre
 class PosIterator
 {
 public:
@@ -88,7 +100,7 @@ public:
     {
         if(current_.col() == centre_.col() + 1)
         {
-            current_.pos_ += Position::boardSize;
+            current_.pos_ += Position::boardSize - 2;
         }
         else
         {
@@ -102,14 +114,19 @@ public:
         return *this;
     }
 
-    Position operator*()
+    Position& operator*()
     {
         return current_;
     }
 
+    Position* operator->()
+    {
+        return &current_;
+    }
+
     bool atEnd() const
     {
-        return current_.pos_ >= Position(centre_.row() + 1, centre_.col() + 1);
+        return current_.pos_ > Position(centre_.row() + 1, centre_.col() + 1);
     }
 
 private:
@@ -130,6 +147,7 @@ public:
         {
             OBSTACLE, ALPHA, NUM, FREE
         } type;
+
         char id;
     };
 
@@ -160,39 +178,27 @@ public:
 
     struct Pawn
     {
-        Pawn() :
-            pathCalculated(false)
+        Pawn()
         {
         }
 
-        explicit Pawn(const Position& pos) :
-            pos(pos), pathCalculated(false)
+        explicit Pawn(char id, const Position& pos) :
+            id(id), pos(pos)
         {
         }
+
+        char id;
 
         Position pos;
 
-        bool pathCalculated;
-
-        std::deque<PathEntry> path;
     };
 
     GameState()
     {
-        init(DEFAULT_BOARD_SIZE, DEFAULT_PAWNS_PER_PLAYER);
-        for(size_t i = 0; i < board.size(); ++i)
-        {
-            board[i].type = Field::FREE;
-        }
+        init(DEFAULT_BOARD_SIZE + 2, DEFAULT_PAWNS_PER_PLAYER);
     }
 
-    void init(size_t boardSize, size_t pawnsPerPlayer)
-    {
-        Position::boardSize = boardSize;
-        board.resize(boardSize * boardSize);
-        alphaProximity.resize(board.size());
-        numProximity.resize(board.size());
-    }
+    void init(size_t boardSize, size_t pawnsPerPlayer);
 
     std::vector<Field> board;
 
@@ -204,149 +210,45 @@ public:
 
     clock_t timeLeft;
 
-    void calculateProximity(std::map<char, Pawn>& pawns, std::vector<size_t>& proximity)
-    {
-        size_t size = board.size();
-
-        std::vector<bool> visited;
-        visited.resize(size, false);
-        proximity.assign(size, MAX_SIZE_T);
-
-        VisitEntry entry;
-
-        std::deque<VisitEntry> toVisit;
-
-        for(std::map<char, Pawn>::iterator it = pawns.begin(); it != pawns.end(); ++it)
-        {
-            entry.pos = it->second.pos;
-            entry.distance = 0;
-            toVisit.push_back(entry);
-        }
-
-        while(toVisit.size())
-        {
-            VisitEntry front = toVisit.front();
-            toVisit.pop_front();
-            visited[front.pos] = true;
-
-            if(front.distance < proximity[front.pos])
-            {
-                proximity[front.pos] = front.distance;
-                entry.distance = front.distance + 1;
-
-                for(Position::Iterator it(front.pos); !it.atEnd(); ++it)
-                {
-                    Position pos = *it;
-                    if(!visited[pos] && board[pos].type != Field::OBSTACLE)
-                    {
-                        visited[pos] = true;
-                        entry.pos = pos;
-                        toVisit.push_back(entry);
-                    }
-                }
-            }
-        }
-    }
-
 };
 
-inline size_t row(const std::string& coord)
+// zwraca pare: <wartosc ruchu, srednia odleglosc od wlasnego pola>
+std::pair<size_t, size_t> stateValue(std::vector<GameState::Field>& board, std::vector<size_t>& proximity, std::vector<
+        size_t>& opponentProximity);
+
+void calculateProximity(const std::vector<GameState::Field>& board, std::map<char, GameState::Pawn>& pawns,
+        std::vector<size_t>& proximity);
+
+void movePawn(std::vector<GameState::Field>& board, GameState::Pawn& pawn, const Position& toPosition,
+        GameState::Field::Type pawnType);
+
+void blockPosition(std::vector<GameState::Field>& board, const Position& target);
+
+void unblockPosition(std::vector<GameState::Field>& board, const Position& target);
+
+Position moveToPos(const Position& pos, const std::string& move);
+
+std::string posToCoord(const Position& pos);
+
+std::string posToMove(const Position& start, const Position& end);
+
+std::ostream& operator<<(std::ostream& os, const GameState::Field& field);
+
+std::ostream& operator<<(std::ostream& os, const GameState& gameState);
+
+inline size_t coordToRow(const std::string& coord)
 {
     return Position::boardSize - atoi(coord.substr(1).c_str()) - 1;
 }
 
-inline size_t column(const std::string& coord)
+inline size_t coordToCol(const std::string& coord)
 {
     return coord[0] - 'a' + 1;
 }
 
 inline Position coordToPos(const std::string& coord)
 {
-    return Position(row(coord), column(coord));
-}
-
-inline std::string posToCoord(const Position& pos)
-{
-    std::stringstream result;
-    result << static_cast<char> ('a' + pos.col() - 1) << Position::boardSize - pos.row() - 1;
-    return result.str();
-}
-
-inline Position moveToPos(const Position& pos, const std::string& move)
-{
-    if(move == "nw")
-    {
-        return Position(pos.row() - 1, pos.col() - 1);
-    }
-    else if(move == "n")
-    {
-        return Position(pos.row() - 1, pos.col());
-    }
-    else if(move == "ne")
-    {
-        return Position(pos.row() - 1, pos.col() + 1);
-    }
-    else if(move == "w")
-    {
-        return Position(pos.row(), pos.col() - 1);
-    }
-    else if(move == "e")
-    {
-        return Position(pos.row(), pos.col() + 1);
-    }
-    else if(move == "sw")
-    {
-        return Position(pos.row() - 1, pos.col() - 1);
-    }
-    else if(move == "s")
-    {
-        return Position(pos.row() - 1, pos.col());
-    }
-    else if(move == "se")
-    {
-        return Position(pos.row() - 1, pos.col() + 1);
-    }
-
-    throw std::runtime_error("Wrong move: " + move);
-}
-
-inline std::string posToMove(const Position& start, const Position& end)
-{
-    std::stringstream result;
-    if(start.row() < end.row())
-        result << 's';
-    else if(start.row() > end.row())
-        result << 'n';
-
-    if(start.col() < end.col())
-        result << 'e';
-    else if(start.col() > end.col())
-        result << 'w';
-
-    return result.str();
-}
-
-inline std::ostream& operator<<(std::ostream& os, const GameState::Field& field)
-{
-    if(field.type == GameState::Field::OBSTACLE)
-        os << '#';
-    else if(field.type == GameState::Field::FREE)
-        os << '.';
-    else
-        os << field.id;
-    return os;
-}
-
-inline std::ostream& operator<<(std::ostream& os, const GameState& gameState)
-{
-    for(size_t i = 0; i < Position::boardSize; ++i)
-    {
-        std::copy(gameState.board.begin() + (i * Position::boardSize), gameState.board.begin()
-                + ((i + 1) * Position::boardSize), std::ostream_iterator<GameState::Field>(os));
-        os << '\n';
-    }
-
-    return os;
+    return Position(coordToRow(coord), coordToCol(coord));
 }
 
 #endif /* GAMESTATE_HPP_ */

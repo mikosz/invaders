@@ -9,6 +9,8 @@
 #define GTPHANDLERS_HPP_
 
 #include <string>
+#include <vector>
+#include <functional>
 
 class GtpHandler : public std::unary_function<const std::vector<std::string>&, std::string>
 {
