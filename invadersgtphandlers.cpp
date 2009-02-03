@@ -18,6 +18,117 @@ namespace
 const Position NULL_POS = Position(MAX_SIZE_T, MAX_SIZE_T);
 
 const size_t MAX_BEST_MOVES = 10;
+
+const size_t MAX_BEST_PLACES = 10;
+
+struct Move
+{
+    Move() :
+        pawn(0)
+    {
+    }
+
+    Move(Position move, Position block, Pawn* pawn) :
+        move(move), block(block), pawn(pawn)
+    {
+    }
+
+    Position move, block;
+    Pawn* pawn;
+};
+
+template<class First, class Second>
+struct SecondOfPairGreaterComp
+{
+    bool operator()(const std::pair<First, Second>& lhs, const std::pair<First, Second>& rhs) const
+    {
+        return rhs.second < lhs.second;
+    }
+};
+
+std::pair<Move, StateValue> bestMove(std::vector<Field>& board, std::map<char, Pawn>& pawns,
+        std::map<char, Pawn>& opponentPawns, std::vector<size_t>& proximity, std::vector<size_t>& opponentProximity,
+        Field::Type pawnType, Field::Type opponentPawnType, unsigned int maxDepth, bool checkAllSeparated)
+{
+    typedef std::vector<std::pair<Move, StateValue> > MovesContainer;
+    MovesContainer moves;
+    bool allSeparated = true;
+
+    std::map<char, Pawn>::iterator pawnIt, pawnsEnd = pawns.end();
+    for(pawnIt = pawns.begin(); pawnIt != pawnsEnd; ++pawnIt)
+    {
+        if(checkAllSeparated && opponentProximity[pawnIt->second.pos] == MAX_SIZE_T)
+            continue;
+        else
+            allSeparated = false;
+
+        for(Position::Iterator moveIt = Position::Iterator(pawnIt->second.pos); !moveIt.atEnd(); ++moveIt)
+        {
+            if(board[*moveIt].type == Field::FREE)
+            {
+                Position startingPawnPos = pawnIt->second.pos;
+                movePawn(board, pawnIt->second, *moveIt, pawnType);
+                for(Position::Iterator blockIt = Position::Iterator(*moveIt); !blockIt.atEnd(); ++blockIt)
+                {
+                    if(board[*blockIt].type == Field::FREE)
+                    {
+                        blockPosition(board, *blockIt);
+
+                        calculateProximity(board, pawns, proximity);
+                        calculateProximity(board, opponentPawns, opponentProximity);
+                        StateValue value = stateValue(board, proximity, opponentProximity);
+
+                        Move move(*moveIt, *blockIt, &pawnIt->second);
+                        MovesContainer::iterator place = std::lower_bound(moves.begin(), moves.end(), std::make_pair(
+                                move, value), SecondOfPairGreaterComp<Move, StateValue> ());
+                        if(static_cast<size_t> (place - moves.begin()) < MAX_BEST_MOVES)
+                            moves.insert(place, std::make_pair(move, value));
+                        if(moves.size() > MAX_BEST_MOVES)
+                            moves.pop_back();
+
+                        unblockPosition(board, *blockIt);
+                    }
+                }
+                movePawn(board, pawnIt->second, startingPawnPos, pawnType);
+            }
+        }
+    }
+
+    if(allSeparated && checkAllSeparated)
+    {
+        return bestMove(board, pawns, opponentPawns, proximity, opponentProximity, pawnType, opponentPawnType, 0, false);
+    }
+    else if(moves.size() && maxDepth)
+    {
+        MovesContainer movesRecalculated;
+        MovesContainer::iterator end = moves.end();
+        for(MovesContainer::iterator move = moves.begin(); move != end; ++move)
+        {
+            Position startingPawnPos = move->first.pawn->pos;
+            movePawn(board, *move->first.pawn, move->first.move, pawnType);
+            blockPosition(board, move->first.block);
+            move->second -= bestMove(board, opponentPawns, pawns, opponentProximity, proximity, opponentPawnType,
+                    pawnType, maxDepth - 1, true).second;
+            MovesContainer::iterator place = std::lower_bound(movesRecalculated.begin(), movesRecalculated.end(),
+                    *move, SecondOfPairGreaterComp<Move, StateValue> ());
+            movesRecalculated.insert(place, *move);
+
+            unblockPosition(board, move->first.block);
+            movePawn(board, *move->first.pawn, startingPawnPos, pawnType);
+        }
+        moves.swap(movesRecalculated);
+    }
+
+    if(moves.size())
+    {
+        return std::make_pair(moves.front().first, moves.front().second);
+    }
+    else
+    {
+        return std::make_pair(Move(Position(), Position(), 0), StateValue());
+    }
+}
+
 }
 
 char GenplaceGtpHandler::dummyPawnId = '9' < 'z' ? 'z' + 1 : '9' + 1;
@@ -116,8 +227,8 @@ std::pair<Position, StateValue> GenplaceGtpHandler::bestPlace(std::vector<Field>
         std::map<char, Pawn>& opponentPawns, std::vector<size_t>& proximity, std::vector<size_t>& opponentProximity,
         Field::Type pawnType, Field::Type opponentPawnType, unsigned int maxDepth)
 {
-    Position bestPos = NULL_POS;
-    StateValue bestPosValue;
+    typedef std::vector<std::pair<Position, StateValue> > PlacesContainer;
+    PlacesContainer places;
 
     for(size_t i = 0; i < board.size(); ++i)
     {
@@ -131,11 +242,15 @@ std::pair<Position, StateValue> GenplaceGtpHandler::bestPlace(std::vector<Field>
             calculateProximity(board, pawns, proximity);
             calculateProximity(board, opponentPawns, opponentProximity);
             StateValue value = stateValue(board, proximity, opponentProximity);
-            if(bestPos == NULL_POS || bestPosValue < value)
-            {
-                bestPos = i;
-                bestPosValue = value;
-            }
+
+            std::pair<Position, StateValue> place(i, value);
+            PlacesContainer::iterator placeIt = std::lower_bound(places.begin(), places.end(), place,
+                    SecondOfPairGreaterComp<Position, StateValue> ());
+            if(static_cast<size_t> (placeIt - places.begin()) < MAX_BEST_PLACES)
+                places.insert(placeIt, place);
+            if(places.size() > MAX_BEST_PLACES)
+                places.pop_back();
+
             --dummyPawnId;
             size_t erased = pawns.erase(dummyPawnId);
             assert(erased);
@@ -143,7 +258,38 @@ std::pair<Position, StateValue> GenplaceGtpHandler::bestPlace(std::vector<Field>
         }
     }
 
-    return std::make_pair(bestPos, bestPosValue);
+    if(maxDepth)
+    {
+        PlacesContainer placesRecalculated;
+        PlacesContainer::iterator end = places.end();
+        for(PlacesContainer::iterator place = places.begin(); place != end; ++place)
+        {
+            board[place->first].type = pawnType;
+            board[place->first].id = dummyPawnId;
+            bool inserted = pawns.insert(std::make_pair(dummyPawnId, Pawn(dummyPawnId, place->first))).second;
+            ++dummyPawnId;
+            assert(inserted);
+
+            if(opponentPawns.size() < gameState_.pawnsPerPlayer)
+                place->second -= bestPlace(board, opponentPawns, pawns, opponentProximity, proximity, opponentPawnType,
+                        pawnType, maxDepth - 1).second;
+            else
+                place->second -= bestMove(board, opponentPawns, pawns, opponentProximity, proximity, opponentPawnType,
+                        pawnType, maxDepth - 1, true).second;
+
+            PlacesContainer::iterator placeIt = std::lower_bound(placesRecalculated.begin(), placesRecalculated.end(),
+                    *place, SecondOfPairGreaterComp<Position, StateValue> ());
+            placesRecalculated.insert(placeIt, *place);
+
+            --dummyPawnId;
+            size_t erased = pawns.erase(dummyPawnId);
+            assert(erased);
+            board[place->first].type = Field::FREE;
+        }
+        places.swap(placesRecalculated);
+    }
+
+    return places.front();
 }
 
 GenplaceGtpHandler::result_type GenplaceGtpHandler::operator ()(GenplaceGtpHandler::argument_type arguments)
@@ -154,7 +300,7 @@ GenplaceGtpHandler::result_type GenplaceGtpHandler::operator ()(GenplaceGtpHandl
     if(arguments[0] == "al")
     {
         bestPos = bestPlace(testState.board, testState.alphaPawns, testState.numPawns, testState.alphaProximity,
-                testState.numProximity, Field::ALPHA, Field::NUM, 2).first;
+                testState.numProximity, Field::ALPHA, Field::NUM, 1).first;
         if(bestPos != NULL_POS)
         {
             gameState_.board[bestPos].type = Field::ALPHA;
@@ -164,7 +310,7 @@ GenplaceGtpHandler::result_type GenplaceGtpHandler::operator ()(GenplaceGtpHandl
     else
     {
         bestPos = bestPlace(testState.board, testState.numPawns, testState.alphaPawns, testState.numProximity,
-                testState.alphaProximity, Field::NUM, Field::ALPHA, 2).first;
+                testState.alphaProximity, Field::NUM, Field::ALPHA, 1).first;
         if(bestPos != NULL_POS)
         {
             gameState_.board[bestPos].type = Field::NUM;
@@ -174,96 +320,6 @@ GenplaceGtpHandler::result_type GenplaceGtpHandler::operator ()(GenplaceGtpHandl
     gameState_.board[bestPos].id = arguments[1][0];
 
     return "= " + posToCoord(bestPos);
-}
-
-bool GenmoveGtpHandler::MoveComp::operator()(const std::pair<GenmoveGtpHandler::Move, StateValue>& lhs, const std::pair<GenmoveGtpHandler::Move,
-        StateValue>& rhs) const
-{
-    return rhs.second < lhs.second;
-}
-
-std::pair<GenmoveGtpHandler::Move, StateValue> GenmoveGtpHandler::bestMove(std::vector<Field>& board, std::map<char,
-        Pawn>& pawns, std::map<char, Pawn>& opponentPawns, std::vector<size_t>& proximity,
-        std::vector<size_t>& opponentProximity, Field::Type pawnType, Field::Type opponentPawnType,
-        unsigned int maxDepth, bool checkAllSeparated)
-{
-    typedef std::vector<std::pair<GenmoveGtpHandler::Move, StateValue> > MovesContainer;
-    MovesContainer moves;
-    bool allSeparated = true;
-
-    std::map<char, Pawn>::iterator pawnIt, pawnsEnd = pawns.end();
-    for(pawnIt = pawns.begin(); pawnIt != pawnsEnd; ++pawnIt)
-    {
-        if(checkAllSeparated && opponentProximity[pawnIt->second.pos] == MAX_SIZE_T)
-            continue;
-        else
-            allSeparated = false;
-
-        for(Position::Iterator moveIt = Position::Iterator(pawnIt->second.pos); !moveIt.atEnd(); ++moveIt)
-        {
-            if(board[*moveIt].type == Field::FREE)
-            {
-                Position startingPawnPos = pawnIt->second.pos;
-                movePawn(board, pawnIt->second, *moveIt, pawnType);
-                for(Position::Iterator blockIt = Position::Iterator(*moveIt); !blockIt.atEnd(); ++blockIt)
-                {
-                    if(board[*blockIt].type == Field::FREE)
-                    {
-                        blockPosition(board, *blockIt);
-
-                        calculateProximity(board, pawns, proximity);
-                        calculateProximity(board, opponentPawns, opponentProximity);
-                        StateValue value = stateValue(board, proximity, opponentProximity);
-
-                        Move move(*moveIt, *blockIt, &pawnIt->second);
-                        MovesContainer::iterator place = std::lower_bound(moves.begin(), moves.end(), std::make_pair(
-                                move, value), GenmoveGtpHandler::MoveComp());
-                        if(static_cast<size_t>(place - moves.begin()) < MAX_BEST_MOVES)
-                            moves.insert(place, std::make_pair(move, value));
-                        if(moves.size() > MAX_BEST_MOVES)
-                            moves.pop_back();
-
-                        unblockPosition(board, *blockIt);
-                    }
-                }
-                movePawn(board, pawnIt->second, startingPawnPos, pawnType);
-            }
-        }
-    }
-
-    if(allSeparated && checkAllSeparated)
-    {
-        return bestMove(board, pawns, opponentPawns, proximity, opponentProximity, pawnType, opponentPawnType, 0, false);
-    }
-    else if(moves.size() && maxDepth)
-    {
-        MovesContainer movesRecalculated;
-        MovesContainer::iterator end = moves.end();
-        for(MovesContainer::iterator move = moves.begin(); move != end; ++move)
-        {
-            Position startingPawnPos = move->first.pawn->pos;
-            movePawn(board, *move->first.pawn, move->first.move, pawnType);
-            blockPosition(board, move->first.block);
-            move->second -= bestMove(board, opponentPawns, pawns, opponentProximity, proximity, opponentPawnType,
-                    pawnType, maxDepth - 1, true).second;
-            MovesContainer::iterator place = std::lower_bound(movesRecalculated.begin(), movesRecalculated.end(),
-                    *move, GenmoveGtpHandler::MoveComp());
-            movesRecalculated.insert(place, *move);
-
-            unblockPosition(board, move->first.block);
-            movePawn(board, *move->first.pawn, startingPawnPos, pawnType);
-        }
-        moves.swap(movesRecalculated);
-    }
-
-    if(moves.size())
-    {
-        return std::make_pair(moves.front().first, moves.front().second);
-    }
-    else
-    {
-        return std::make_pair(Move(Position(), Position(), 0), StateValue());
-    }
 }
 
 GenmoveGtpHandler::result_type GenmoveGtpHandler::operator ()(GenmoveGtpHandler::argument_type arguments)

@@ -131,33 +131,6 @@ public:
 
 private:
 
-    struct Move
-    {
-        Move() :
-            pawn(0)
-        {
-        }
-
-        Move(Position move, Position block, Pawn* pawn) :
-            move(move), block(block), pawn(pawn)
-        {
-        }
-
-        Position move, block;
-        Pawn* pawn;
-    };
-
-    struct MoveComp
-    {
-        bool operator()(const std::pair<GenmoveGtpHandler::Move, StateValue>& lhs, const std::pair<GenmoveGtpHandler::Move,
-                StateValue>& rhs) const;
-    };
-
-    std::pair<Move, StateValue> bestMove(std::vector<Field>& board, std::map<char, Pawn>& pawns,
-            std::map<char, Pawn>& opponentPawns, std::vector<size_t>& proximity,
-            std::vector<size_t>& opponentProximity, Field::Type pawnType, Field::Type opponentPawnType,
-            unsigned int maxDepth, bool checkAllSeparated);
-
     GameState& gameState_;
 
 };
