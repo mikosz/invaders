@@ -14,9 +14,9 @@
 
 size_t Position::boardSize = DEFAULT_BOARD_SIZE;
 
-void setFieldFree(GameState::Field& field)
+void setFieldFree(Field& field)
 {
-    field.type = GameState::Field::FREE;
+    field.type = Field::FREE;
 }
 
 void GameState::init(size_t boardSize, size_t pawnsPerPlayer)
@@ -37,35 +37,35 @@ void GameState::init(size_t boardSize, size_t pawnsPerPlayer)
     }
 }
 
-std::pair<size_t, size_t> stateValue(std::vector<GameState::Field>& board, std::vector<size_t>& proximity, std::vector<
-        size_t>& opponentProximity)
+bool StateValue::operator<(const StateValue& rhs) const
 {
-    size_t value = 0;
-    size_t avgDistanceSum = 0, avgDistanceCount = 0;
+    return fieldsOwned < rhs.fieldsOwned;
+}
+
+StateValue stateValue(std::vector<Field>& board, std::vector<size_t>& proximity, std::vector<size_t>& opponentProximity)
+{
+    StateValue value;
 
     for(size_t i = 0; i < board.size(); ++i)
     {
-        if(board[i].type != GameState::Field::OBSTACLE)
+        if(board[i].type != Field::OBSTACLE)
         {
             if(proximity[i] < opponentProximity[i])
             {
-                avgDistanceSum += proximity[i];
-                ++avgDistanceCount;
-                ++value;
+                ++value.fieldsOwned;
             }
             else if(opponentProximity[i] < proximity[i])
             {
-                --value;
+                --value.fieldsOwned;
             }
             // na razie ignoruje rowne odleglosci
         }
     }
 
-    return std::make_pair(value, avgDistanceCount ? avgDistanceSum / avgDistanceCount : 0);
+    return value;
 }
 
-void calculateProximity(const std::vector<GameState::Field>& board, std::map<char, GameState::Pawn>& pawns,
-        std::vector<size_t>& proximity)
+void calculateProximity(const std::vector<Field>& board, std::map<char, Pawn>& pawns, std::vector<size_t>& proximity)
 {
     size_t size = board.size();
 
@@ -73,11 +73,11 @@ void calculateProximity(const std::vector<GameState::Field>& board, std::map<cha
     visited.resize(size, false);
     proximity.assign(size, MAX_SIZE_T);
 
-    GameState::VisitEntry entry;
+    VisitEntry entry;
 
-    std::deque<GameState::VisitEntry> toVisit;
+    std::deque<VisitEntry> toVisit;
 
-    for(std::map<char, GameState::Pawn>::iterator it = pawns.begin(); it != pawns.end(); ++it)
+    for(std::map<char, Pawn>::iterator it = pawns.begin(); it != pawns.end(); ++it)
     {
         entry.pos = it->second.pos;
         entry.distance = 0;
@@ -86,7 +86,7 @@ void calculateProximity(const std::vector<GameState::Field>& board, std::map<cha
 
     while(toVisit.size())
     {
-        GameState::VisitEntry front = toVisit.front();
+        VisitEntry front = toVisit.front();
         toVisit.pop_front();
         visited[front.pos] = true;
 
@@ -98,7 +98,7 @@ void calculateProximity(const std::vector<GameState::Field>& board, std::map<cha
             for(Position::Iterator it(front.pos); !it.atEnd(); ++it)
             {
                 Position pos = *it;
-                if(!visited[pos] && board[pos].type != GameState::Field::OBSTACLE)
+                if(!visited[pos] && board[pos].type != Field::OBSTACLE)
                 {
                     visited[pos] = true;
                     entry.pos = pos;
@@ -170,11 +170,11 @@ std::string posToMove(const Position& start, const Position& end)
     return result.str();
 }
 
-std::ostream& operator<<(std::ostream& os, const GameState::Field& field)
+std::ostream& operator<<(std::ostream& os, const Field& field)
 {
-    if(field.type == GameState::Field::OBSTACLE)
+    if(field.type == Field::OBSTACLE)
         os << '#';
-    else if(field.type == GameState::Field::FREE)
+    else if(field.type == Field::FREE)
         os << '.';
     else
         os << field.id;
@@ -186,36 +186,35 @@ std::ostream& operator<<(std::ostream& os, const GameState& gameState)
     for(size_t i = 0; i < Position::boardSize; ++i)
     {
         std::copy(gameState.board.begin() + (i * Position::boardSize), gameState.board.begin() + ((i + 1)
-                * Position::boardSize), std::ostream_iterator<GameState::Field>(os));
+                * Position::boardSize), std::ostream_iterator<Field>(os));
         os << '\n';
     }
 
     return os;
 }
 
-void movePawn(std::vector<GameState::Field>& board, GameState::Pawn& pawn, const Position& toPosition,
-        GameState::Field::Type pawnType)
+void movePawn(std::vector<Field>& board, Pawn& pawn, const Position& toPosition, Field::Type pawnType)
 {
-    assert(board[toPosition].type == GameState::Field::FREE);
+    assert(board[toPosition].type == Field::FREE);
     assert(max(abs(pawn.pos.row() - toPosition.row()), abs(pawn.pos.col() - toPosition.col())) == 1);
-    assert(pawnType == GameState::Field::ALPHA || pawnType == GameState::Field::NUM);
+    assert(pawnType == Field::ALPHA || pawnType == Field::NUM);
 
-    board[pawn.pos].type = GameState::Field::FREE;
+    board[pawn.pos].type = Field::FREE;
     pawn.pos = toPosition;
     board[toPosition].type = pawnType;
     board[toPosition].id = pawn.id;
 }
 
-void blockPosition(std::vector<GameState::Field>& board, const Position& target)
+void blockPosition(std::vector<Field>& board, const Position& target)
 {
-    assert(board[target].type == GameState::Field::FREE);
+    assert(board[target].type == Field::FREE);
 
-    board[target].type = GameState::Field::OBSTACLE;
+    board[target].type = Field::OBSTACLE;
 }
 
-void unblockPosition(std::vector<GameState::Field>& board, const Position& target)
+void unblockPosition(std::vector<Field>& board, const Position& target)
 {
-    assert(board[target].type == GameState::Field::OBSTACLE);
+    assert(board[target].type == Field::OBSTACLE);
 
-    board[target].type = GameState::Field::FREE;
+    board[target].type = Field::FREE;
 }

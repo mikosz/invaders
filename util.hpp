@@ -10,19 +10,19 @@
 
 #include <limits>
 
-template <class T1, class T2>
+template<class T1, class T2>
 inline T1 min(T1 lhs, T2 rhs)
 {
     return lhs < rhs ? lhs : rhs;
 }
 
-template <class T1, class T2>
+template<class T1, class T2>
 inline T1 max(T1 lhs, T2 rhs)
 {
     return rhs < lhs ? lhs : rhs;
 }
 
-template <class T1, class T2>
+template<class T1, class T2>
 inline T1 absDiff(T1 lhs, T2 rhs)
 {
     return lhs < rhs ? rhs - lhs : lhs - rhs;

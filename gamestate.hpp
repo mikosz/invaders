@@ -137,61 +137,61 @@ private:
 
 };
 
+struct Field
+{
+    enum Type
+    {
+        OBSTACLE, ALPHA, NUM, FREE
+    } type;
+
+    char id;
+};
+
+struct VisitEntry
+{
+    Position pos;
+    size_t distance;
+};
+
+struct PathEntry
+{
+    PathEntry()
+    {
+    }
+
+    PathEntry(Position move, Position block) :
+        move(move), block(block)
+    {
+    }
+
+    bool operator==(const PathEntry& rhs) const
+    {
+        return move == rhs.move && block == rhs.block;
+    }
+
+    Position move, block;
+};
+
+struct Pawn
+{
+    Pawn()
+    {
+    }
+
+    explicit Pawn(char id, const Position& pos) :
+        id(id), pos(pos)
+    {
+    }
+
+    char id;
+
+    Position pos;
+
+};
+
 struct GameState
 {
 public:
-
-    struct Field
-    {
-        enum Type
-        {
-            OBSTACLE, ALPHA, NUM, FREE
-        } type;
-
-        char id;
-    };
-
-    struct VisitEntry
-    {
-        Position pos;
-        size_t distance;
-    };
-
-    struct PathEntry
-    {
-        PathEntry()
-        {
-        }
-
-        PathEntry(Position move, Position block) :
-            move(move), block(block)
-        {
-        }
-
-        bool operator==(const PathEntry& rhs) const
-        {
-            return move == rhs.move && block == rhs.block;
-        }
-
-        Position move, block;
-    };
-
-    struct Pawn
-    {
-        Pawn()
-        {
-        }
-
-        explicit Pawn(char id, const Position& pos) :
-            id(id), pos(pos)
-        {
-        }
-
-        char id;
-
-        Position pos;
-
-    };
 
     GameState()
     {
@@ -212,19 +212,34 @@ public:
 
 };
 
-// zwraca pare: <wartosc ruchu, srednia odleglosc od wlasnego pola>
-std::pair<size_t, size_t> stateValue(std::vector<GameState::Field>& board, std::vector<size_t>& proximity, std::vector<
-        size_t>& opponentProximity);
+struct StateValue
+{
+    StateValue() :
+        fieldsOwned(0)
+    {
+    }
 
-void calculateProximity(const std::vector<GameState::Field>& board, std::map<char, GameState::Pawn>& pawns,
-        std::vector<size_t>& proximity);
+    bool operator<(const StateValue& rhs) const;
 
-void movePawn(std::vector<GameState::Field>& board, GameState::Pawn& pawn, const Position& toPosition,
-        GameState::Field::Type pawnType);
+    StateValue& operator-=(const StateValue& rhs)
+    {
+        fieldsOwned -= rhs.fieldsOwned;
+        return *this;
+    }
 
-void blockPosition(std::vector<GameState::Field>& board, const Position& target);
+    int fieldsOwned;
+};
 
-void unblockPosition(std::vector<GameState::Field>& board, const Position& target);
+StateValue
+        stateValue(std::vector<Field>& board, std::vector<size_t>& proximity, std::vector<size_t>& opponentProximity);
+
+void calculateProximity(const std::vector<Field>& board, std::map<char, Pawn>& pawns, std::vector<size_t>& proximity);
+
+void movePawn(std::vector<Field>& board, Pawn& pawn, const Position& toPosition, Field::Type pawnType);
+
+void blockPosition(std::vector<Field>& board, const Position& target);
+
+void unblockPosition(std::vector<Field>& board, const Position& target);
 
 Position moveToPos(const Position& pos, const std::string& move);
 
@@ -232,7 +247,7 @@ std::string posToCoord(const Position& pos);
 
 std::string posToMove(const Position& start, const Position& end);
 
-std::ostream& operator<<(std::ostream& os, const GameState::Field& field);
+std::ostream& operator<<(std::ostream& os, const Field& field);
 
 std::ostream& operator<<(std::ostream& os, const GameState& gameState);
 

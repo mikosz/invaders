@@ -10,10 +10,14 @@
 #include <cassert>
 #include <iostream>
 #include <iterator>
+#include <vector>
+#include <algorithm>
 
 namespace
 {
 const Position NULL_POS = Position(MAX_SIZE_T, MAX_SIZE_T);
+
+const size_t MAX_BEST_MOVES = 10;
 }
 
 char GenplaceGtpHandler::dummyPawnId = '9' < 'z' ? 'z' + 1 : '9' + 1;
@@ -39,11 +43,11 @@ SetboardGtpHandler::result_type SetboardGtpHandler::operator()(SetboardGtpHandle
             char c = line[col - 1];
             if(c == '.')
             {
-                gameState_.board[Position(row, col)].type = GameState::Field::FREE;
+                gameState_.board[Position(row, col)].type = Field::FREE;
             }
             else if(c == '#')
             {
-                gameState_.board[Position(row, col)].type = GameState::Field::OBSTACLE;
+                gameState_.board[Position(row, col)].type = Field::OBSTACLE;
             }
             else
             {
@@ -59,11 +63,11 @@ PlaceGtpHandler::result_type PlaceGtpHandler::operator ()(PlaceGtpHandler::argum
 {
     Position pos = coordToPos(arguments[2]);
 
-    GameState::Field field;
+    Field field;
     if(arguments[0] == "al")
     {
-        field.type = GameState::Field::ALPHA;
-        gameState_.alphaPawns.insert(std::make_pair(arguments[1][0], GameState::Pawn(arguments[1][0], pos)));
+        field.type = Field::ALPHA;
+        gameState_.alphaPawns.insert(std::make_pair(arguments[1][0], Pawn(arguments[1][0], pos)));
         field.id = arguments[1][0];
         gameState_.board[pos] = field;
 
@@ -71,8 +75,8 @@ PlaceGtpHandler::result_type PlaceGtpHandler::operator ()(PlaceGtpHandler::argum
     }
     else
     {
-        field.type = GameState::Field::NUM;
-        gameState_.numPawns.insert(std::make_pair(arguments[1][0], GameState::Pawn(arguments[1][0], pos)));
+        field.type = Field::NUM;
+        gameState_.numPawns.insert(std::make_pair(arguments[1][0], Pawn(arguments[1][0], pos)));
         field.id = arguments[1][0];
         gameState_.board[pos] = field;
 
@@ -90,7 +94,7 @@ MoveGtpHandler::result_type MoveGtpHandler::operator ()(MoveGtpHandler::argument
         Position movePos = moveToPos(currentPos, arguments[2]);
         Position blockPos = moveToPos(movePos, arguments[3]);
 
-        movePawn(gameState_.board, gameState_.alphaPawns[arguments[1][0]], movePos, GameState::Field::ALPHA);
+        movePawn(gameState_.board, gameState_.alphaPawns[arguments[1][0]], movePos, Field::ALPHA);
         blockPosition(gameState_.board, blockPos);
         calculateProximity(gameState_.board, gameState_.alphaPawns, gameState_.alphaProximity);
     }
@@ -100,7 +104,7 @@ MoveGtpHandler::result_type MoveGtpHandler::operator ()(MoveGtpHandler::argument
         Position movePos = moveToPos(currentPos, arguments[2]);
         Position blockPos = moveToPos(movePos, arguments[3]);
 
-        movePawn(gameState_.board, gameState_.numPawns[arguments[1][0]], movePos, GameState::Field::NUM);
+        movePawn(gameState_.board, gameState_.numPawns[arguments[1][0]], movePos, Field::NUM);
         blockPosition(gameState_.board, blockPos);
         calculateProximity(gameState_.board, gameState_.numPawns, gameState_.numProximity);
     }
@@ -108,28 +112,26 @@ MoveGtpHandler::result_type MoveGtpHandler::operator ()(MoveGtpHandler::argument
     return "=";
 }
 
-std::pair<Position, std::pair<size_t, size_t> > GenplaceGtpHandler::bestPlace(std::vector<GameState::Field>& board,
-        std::map<char, GameState::Pawn>& pawns, std::map<char, GameState::Pawn>& opponentPawns,
-        std::vector<size_t>& proximity, std::vector<size_t>& opponentProximity, GameState::Field::Type pawnType,
-        GameState::Field::Type opponentPawnType)
+std::pair<Position, StateValue> GenplaceGtpHandler::bestPlace(std::vector<Field>& board, std::map<char, Pawn>& pawns,
+        std::map<char, Pawn>& opponentPawns, std::vector<size_t>& proximity, std::vector<size_t>& opponentProximity,
+        Field::Type pawnType, Field::Type opponentPawnType, unsigned int maxDepth)
 {
     Position bestPos = NULL_POS;
-    std::pair<size_t, size_t> bestPosValue;
+    StateValue bestPosValue;
 
     for(size_t i = 0; i < board.size(); ++i)
     {
-        if(board[i].type == GameState::Field::FREE)
+        if(board[i].type == Field::FREE)
         {
             board[i].type = pawnType;
             board[i].id = dummyPawnId;
-            bool inserted = pawns.insert(std::make_pair(dummyPawnId, GameState::Pawn(dummyPawnId, i))).second;
+            bool inserted = pawns.insert(std::make_pair(dummyPawnId, Pawn(dummyPawnId, i))).second;
             ++dummyPawnId;
             assert(inserted);
             calculateProximity(board, pawns, proximity);
             calculateProximity(board, opponentPawns, opponentProximity);
-            std::pair<size_t, size_t> value = stateValue(board, proximity, opponentProximity);
-            if(bestPos == NULL_POS || value.first > bestPosValue.first || (value.first == bestPosValue.first
-                    && value.second < bestPosValue.second))
+            StateValue value = stateValue(board, proximity, opponentProximity);
+            if(bestPos == NULL_POS || bestPosValue < value)
             {
                 bestPos = i;
                 bestPosValue = value;
@@ -137,7 +139,7 @@ std::pair<Position, std::pair<size_t, size_t> > GenplaceGtpHandler::bestPlace(st
             --dummyPawnId;
             size_t erased = pawns.erase(dummyPawnId);
             assert(erased);
-            board[i].type = GameState::Field::FREE;
+            board[i].type = Field::FREE;
         }
     }
 
@@ -152,21 +154,21 @@ GenplaceGtpHandler::result_type GenplaceGtpHandler::operator ()(GenplaceGtpHandl
     if(arguments[0] == "al")
     {
         bestPos = bestPlace(testState.board, testState.alphaPawns, testState.numPawns, testState.alphaProximity,
-                testState.numProximity, GameState::Field::ALPHA, GameState::Field::NUM).first;
+                testState.numProximity, Field::ALPHA, Field::NUM, 2).first;
         if(bestPos != NULL_POS)
         {
-            gameState_.board[bestPos].type = GameState::Field::ALPHA;
-            gameState_.alphaPawns.insert(std::make_pair(arguments[1][0], GameState::Pawn(arguments[1][0], bestPos)));
+            gameState_.board[bestPos].type = Field::ALPHA;
+            gameState_.alphaPawns.insert(std::make_pair(arguments[1][0], Pawn(arguments[1][0], bestPos)));
         }
     }
     else
     {
         bestPos = bestPlace(testState.board, testState.numPawns, testState.alphaPawns, testState.numProximity,
-                testState.alphaProximity, GameState::Field::NUM, GameState::Field::ALPHA).first;
+                testState.alphaProximity, Field::NUM, Field::ALPHA, 2).first;
         if(bestPos != NULL_POS)
         {
-            gameState_.board[bestPos].type = GameState::Field::NUM;
-            gameState_.numPawns.insert(std::make_pair(arguments[1][0], GameState::Pawn(arguments[1][0], bestPos)));
+            gameState_.board[bestPos].type = Field::NUM;
+            gameState_.numPawns.insert(std::make_pair(arguments[1][0], Pawn(arguments[1][0], bestPos)));
         }
     }
     gameState_.board[bestPos].id = arguments[1][0];
@@ -174,42 +176,52 @@ GenplaceGtpHandler::result_type GenplaceGtpHandler::operator ()(GenplaceGtpHandl
     return "= " + posToCoord(bestPos);
 }
 
-std::pair<GameState::Pawn*, std::pair<Position, Position> > GenmoveGtpHandler::bestMove(
-        std::vector<GameState::Field>& board, std::map<char, GameState::Pawn>& pawns,
-        std::map<char, GameState::Pawn>& opponentPawns, std::vector<size_t>& proximity,
-        std::vector<size_t>& opponentProximity, GameState::Field::Type pawnType,
-        GameState::Field::Type opponentPawnType)
+bool GenmoveGtpHandler::MoveComp::operator()(const std::pair<GenmoveGtpHandler::Move, StateValue>& lhs, const std::pair<GenmoveGtpHandler::Move,
+        StateValue>& rhs) const
 {
-    GameState::Pawn* bestPawn = 0;
-    std::pair<Position, Position> bestMove = std::make_pair(NULL_POS, NULL_POS);
-    std::pair<size_t, size_t> bestMoveValue;
+    return rhs.second < lhs.second;
+}
 
-    std::map<char, GameState::Pawn>::iterator pawnIt, pawnsEnd = pawns.end();
+std::pair<GenmoveGtpHandler::Move, StateValue> GenmoveGtpHandler::bestMove(std::vector<Field>& board, std::map<char,
+        Pawn>& pawns, std::map<char, Pawn>& opponentPawns, std::vector<size_t>& proximity,
+        std::vector<size_t>& opponentProximity, Field::Type pawnType, Field::Type opponentPawnType,
+        unsigned int maxDepth, bool checkAllSeparated)
+{
+    typedef std::vector<std::pair<GenmoveGtpHandler::Move, StateValue> > MovesContainer;
+    MovesContainer moves;
+    bool allSeparated = true;
+
+    std::map<char, Pawn>::iterator pawnIt, pawnsEnd = pawns.end();
     for(pawnIt = pawns.begin(); pawnIt != pawnsEnd; ++pawnIt)
     {
+        if(checkAllSeparated && opponentProximity[pawnIt->second.pos] == MAX_SIZE_T)
+            continue;
+        else
+            allSeparated = false;
+
         for(Position::Iterator moveIt = Position::Iterator(pawnIt->second.pos); !moveIt.atEnd(); ++moveIt)
         {
-            if(board[*moveIt].type == GameState::Field::FREE)
+            if(board[*moveIt].type == Field::FREE)
             {
                 Position startingPawnPos = pawnIt->second.pos;
                 movePawn(board, pawnIt->second, *moveIt, pawnType);
                 for(Position::Iterator blockIt = Position::Iterator(*moveIt); !blockIt.atEnd(); ++blockIt)
                 {
-                    if(board[*blockIt].type == GameState::Field::FREE)
+                    if(board[*blockIt].type == Field::FREE)
                     {
                         blockPosition(board, *blockIt);
 
                         calculateProximity(board, pawns, proximity);
                         calculateProximity(board, opponentPawns, opponentProximity);
-                        std::pair<size_t, size_t> value = stateValue(board, proximity, opponentProximity);
+                        StateValue value = stateValue(board, proximity, opponentProximity);
 
-                        if(bestPawn == 0 || bestMoveValue.first < value.first || (bestMoveValue.first == value.first
-                                && bestMoveValue.second > value.second))
-                        {
-                            bestMoveValue = value;
-                            bestMove = std::make_pair(*moveIt, *blockIt);
-                            bestPawn = &(pawnIt->second);
-                        }
+                        Move move(*moveIt, *blockIt, &pawnIt->second);
+                        MovesContainer::iterator place = std::lower_bound(moves.begin(), moves.end(), std::make_pair(
+                                move, value), GenmoveGtpHandler::MoveComp());
+                        if(static_cast<size_t>(place - moves.begin()) < MAX_BEST_MOVES)
+                            moves.insert(place, std::make_pair(move, value));
+                        if(moves.size() > MAX_BEST_MOVES)
+                            moves.pop_back();
 
                         unblockPosition(board, *blockIt);
                     }
@@ -219,7 +231,39 @@ std::pair<GameState::Pawn*, std::pair<Position, Position> > GenmoveGtpHandler::b
         }
     }
 
-    return std::make_pair(bestPawn, bestMove);
+    if(allSeparated && checkAllSeparated)
+    {
+        return bestMove(board, pawns, opponentPawns, proximity, opponentProximity, pawnType, opponentPawnType, 0, false);
+    }
+    else if(moves.size() && maxDepth)
+    {
+        MovesContainer movesRecalculated;
+        MovesContainer::iterator end = moves.end();
+        for(MovesContainer::iterator move = moves.begin(); move != end; ++move)
+        {
+            Position startingPawnPos = move->first.pawn->pos;
+            movePawn(board, *move->first.pawn, move->first.move, pawnType);
+            blockPosition(board, move->first.block);
+            move->second -= bestMove(board, opponentPawns, pawns, opponentProximity, proximity, opponentPawnType,
+                    pawnType, maxDepth - 1, true).second;
+            MovesContainer::iterator place = std::lower_bound(movesRecalculated.begin(), movesRecalculated.end(),
+                    *move, GenmoveGtpHandler::MoveComp());
+            movesRecalculated.insert(place, *move);
+
+            unblockPosition(board, move->first.block);
+            movePawn(board, *move->first.pawn, startingPawnPos, pawnType);
+        }
+        moves.swap(movesRecalculated);
+    }
+
+    if(moves.size())
+    {
+        return std::make_pair(moves.front().first, moves.front().second);
+    }
+    else
+    {
+        return std::make_pair(Move(Position(), Position(), 0), StateValue());
+    }
 }
 
 GenmoveGtpHandler::result_type GenmoveGtpHandler::operator ()(GenmoveGtpHandler::argument_type arguments)
@@ -227,30 +271,30 @@ GenmoveGtpHandler::result_type GenmoveGtpHandler::operator ()(GenmoveGtpHandler:
     std::stringstream result;
     result << "= ";
 
-    std::pair<GameState::Pawn*, std::pair<Position, Position> > bestMov;
+    Move bestMov;
     if(arguments[0] == "al")
     {
         bestMov = bestMove(gameState_.board, gameState_.alphaPawns, gameState_.numPawns, gameState_.alphaProximity,
-                gameState_.numProximity, GameState::Field::ALPHA, GameState::Field::NUM);
-        if(bestMov.first != 0)
+                gameState_.numProximity, Field::ALPHA, Field::NUM, 2, true).first;
+        if(bestMov.pawn != 0)
         {
-            result << bestMov.first->id << " " << posToMove(bestMov.first->pos, bestMov.second.first) << " "
-                    << posToMove(bestMov.second.first, bestMov.second.second);
-            movePawn(gameState_.board, *(bestMov.first), bestMov.second.first, GameState::Field::ALPHA);
-            blockPosition(gameState_.board, bestMov.second.second);
+            result << bestMov.pawn->id << " " << posToMove(bestMov.pawn->pos, bestMov.move) << " " << posToMove(
+                    bestMov.move, bestMov.block);
+            movePawn(gameState_.board, *(bestMov.pawn), bestMov.move, Field::ALPHA);
+            blockPosition(gameState_.board, bestMov.block);
             return result.str();
         }
     }
     else
     {
         bestMov = bestMove(gameState_.board, gameState_.numPawns, gameState_.alphaPawns, gameState_.numProximity,
-                gameState_.alphaProximity, GameState::Field::NUM, GameState::Field::ALPHA);
-        if(bestMov.first != 0)
+                gameState_.alphaProximity, Field::NUM, Field::ALPHA, 2, true).first;
+        if(bestMov.pawn != 0)
         {
-            result << bestMov.first->id << " " << posToMove(bestMov.first->pos, bestMov.second.first) << " "
-                    << posToMove(bestMov.second.first, bestMov.second.second);
-            movePawn(gameState_.board, *(bestMov.first), bestMov.second.first, GameState::Field::NUM);
-            blockPosition(gameState_.board, bestMov.second.second);
+            result << bestMov.pawn->id << " " << posToMove(bestMov.pawn->pos, bestMov.move) << " " << posToMove(
+                    bestMov.move, bestMov.block);
+            movePawn(gameState_.board, *(bestMov.pawn), bestMov.move, Field::NUM);
+            blockPosition(gameState_.board, bestMov.block);
             return result.str();
         }
     }

@@ -112,10 +112,9 @@ private:
     static char dummyPawnId;
 
     // zwraca pare <wybrane miejsce, <wartosc ruchu, srednia odleglosc od wlasnego pola> >
-    std::pair<Position, std::pair<size_t, size_t> > bestPlace(std::vector<GameState::Field>& board, std::map<char,
-            GameState::Pawn>& pawns, std::map<char, GameState::Pawn>& opponentPawns, std::vector<size_t>& proximity,
-            std::vector<size_t>& opponentProximity, GameState::Field::Type pawnType,
-            GameState::Field::Type opponentPawnType);
+    std::pair<Position, StateValue> bestPlace(std::vector<Field>& board, std::map<char, Pawn>& pawns, std::map<char,
+            Pawn>& opponentPawns, std::vector<size_t>& proximity, std::vector<size_t>& opponentProximity,
+            Field::Type pawnType, Field::Type opponentPawnType, unsigned int maxDepth);
 
 };
 
@@ -132,10 +131,32 @@ public:
 
 private:
 
-    std::pair<GameState::Pawn*, std::pair<Position, Position> > bestMove(std::vector<GameState::Field>& board,
-            std::map<char, GameState::Pawn>& pawns, std::map<char, GameState::Pawn>& opponentPawns,
-            std::vector<size_t>& proximity, std::vector<size_t>& opponentProximity, GameState::Field::Type pawnType,
-            GameState::Field::Type opponentPawnType);
+    struct Move
+    {
+        Move() :
+            pawn(0)
+        {
+        }
+
+        Move(Position move, Position block, Pawn* pawn) :
+            move(move), block(block), pawn(pawn)
+        {
+        }
+
+        Position move, block;
+        Pawn* pawn;
+    };
+
+    struct MoveComp
+    {
+        bool operator()(const std::pair<GenmoveGtpHandler::Move, StateValue>& lhs, const std::pair<GenmoveGtpHandler::Move,
+                StateValue>& rhs) const;
+    };
+
+    std::pair<Move, StateValue> bestMove(std::vector<Field>& board, std::map<char, Pawn>& pawns,
+            std::map<char, Pawn>& opponentPawns, std::vector<size_t>& proximity,
+            std::vector<size_t>& opponentProximity, Field::Type pawnType, Field::Type opponentPawnType,
+            unsigned int maxDepth, bool checkAllSeparated);
 
     GameState& gameState_;
 
