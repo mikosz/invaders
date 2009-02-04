@@ -17,9 +17,9 @@ namespace
 {
 const Position NULL_POS = Position(MAX_SIZE_T, MAX_SIZE_T);
 
-const size_t MAX_BEST_MOVES = 10;
+const size_t MAX_BEST_MOVES = 30;
 
-const size_t MAX_BEST_PLACES = 10;
+const size_t MAX_BEST_PLACES = 20;
 
 struct Move
 {
@@ -300,7 +300,7 @@ GenplaceGtpHandler::result_type GenplaceGtpHandler::operator ()(GenplaceGtpHandl
     if(arguments[0] == "al")
     {
         bestPos = bestPlace(testState.board, testState.alphaPawns, testState.numPawns, testState.alphaProximity,
-                testState.numProximity, Field::ALPHA, Field::NUM, 1).first;
+                testState.numProximity, Field::ALPHA, Field::NUM, 2).first;
         if(bestPos != NULL_POS)
         {
             gameState_.board[bestPos].type = Field::ALPHA;
@@ -310,7 +310,7 @@ GenplaceGtpHandler::result_type GenplaceGtpHandler::operator ()(GenplaceGtpHandl
     else
     {
         bestPos = bestPlace(testState.board, testState.numPawns, testState.alphaPawns, testState.numProximity,
-                testState.alphaProximity, Field::NUM, Field::ALPHA, 1).first;
+                testState.alphaProximity, Field::NUM, Field::ALPHA, 2).first;
         if(bestPos != NULL_POS)
         {
             gameState_.board[bestPos].type = Field::NUM;
