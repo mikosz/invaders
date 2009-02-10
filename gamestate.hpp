@@ -210,6 +210,8 @@ public:
 
     clock_t timeLeft;
 
+    clock_t prevTimeLeft;
+
 };
 
 struct StateValue

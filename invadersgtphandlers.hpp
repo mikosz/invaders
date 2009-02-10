@@ -84,6 +84,7 @@ public:
 
     result_type operator ()(argument_type arguments)
     {
+        gameState_.prevTimeLeft = gameState_.timeLeft;
         gameState_.timeLeft = atoi(arguments[0].c_str());
         return "=";
     }

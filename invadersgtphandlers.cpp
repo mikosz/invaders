@@ -327,11 +327,18 @@ GenmoveGtpHandler::result_type GenmoveGtpHandler::operator ()(GenmoveGtpHandler:
     std::stringstream result;
     result << "= ";
 
+    static int maxDepth = 2;
+    if(((gameState_.prevTimeLeft - gameState_.timeLeft) * 2 > gameState_.timeLeft) && (gameState_.prevTimeLeft != 0))
+    {
+        if(maxDepth)
+            --maxDepth;
+    }
+
     Move bestMov;
     if(arguments[0] == "al")
     {
         bestMov = bestMove(gameState_.board, gameState_.alphaPawns, gameState_.numPawns, gameState_.alphaProximity,
-                gameState_.numProximity, Field::ALPHA, Field::NUM, 2, true).first;
+                gameState_.numProximity, Field::ALPHA, Field::NUM, maxDepth, true).first;
         if(bestMov.pawn != 0)
         {
             result << bestMov.pawn->id << " " << posToMove(bestMov.pawn->pos, bestMov.move) << " " << posToMove(
@@ -344,7 +351,7 @@ GenmoveGtpHandler::result_type GenmoveGtpHandler::operator ()(GenmoveGtpHandler:
     else
     {
         bestMov = bestMove(gameState_.board, gameState_.numPawns, gameState_.alphaPawns, gameState_.numProximity,
-                gameState_.alphaProximity, Field::NUM, Field::ALPHA, 2, true).first;
+                gameState_.alphaProximity, Field::NUM, Field::ALPHA, maxDepth, true).first;
         if(bestMov.pawn != 0)
         {
             result << bestMov.pawn->id << " " << posToMove(bestMov.pawn->pos, bestMov.move) << " " << posToMove(

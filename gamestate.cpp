@@ -25,6 +25,8 @@ void GameState::init(size_t boardSize, size_t pawnsPerPlayer)
     board.resize(boardSize * boardSize);
     alphaProximity.resize(board.size());
     numProximity.resize(board.size());
+    timeLeft = 0;
+    prevTimeLeft = 0;
 
     std::for_each(board.begin(), board.end(), setFieldFree);
 
